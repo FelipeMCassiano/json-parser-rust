@@ -1,6 +1,5 @@
-use core::str;
-
-use nom::{branch::alt, IResult};
+#![allow(dead_code)]
+use core::{fmt, str};
 
 pub enum Json {
     Null,
@@ -11,32 +10,37 @@ pub enum Json {
     Object(std::collections::HashMap<String, Json>),
 }
 
-pub fn json(input: &str) -> IResult<&str, Json> {
-    alt((curly_braces, json_string, json_number, json_bool))(input)
+impl fmt::Display for Json {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "json",)
+    }
 }
 
-use std::char;
+pub fn json(input: &str) -> IResult<&str, Json> {
+    alt((
+        json_null,
+        json_bool,
+        json_number,
+        json_string,
+        json_array,
+        json_obj,
+    ))(input)
+}
+
+use std::collections::HashMap;
 
 use nom::{
-    bytes::complete::{is_not, tag},
-    character::complete::{char, digit0, satisfy, space0},
+    branch::alt,
+    bytes::complete::tag,
+    character::complete::{char, digit0, multispace0, satisfy},
     combinator::map,
     multi::{many0, separated_list0},
-    sequence::delimited,
+    sequence::{delimited, terminated, tuple},
+    IResult,
 };
 
-pub fn curly_braces(input: &str) -> IResult<&str, Json> {
-    let (input, strings) = delimited(char('{'), is_not("}"), char('}'))(input)?;
-    Ok((input, Json::String(strings.to_string())))
-}
-
-#[test]
-fn curly_braces_test() {
-    assert_eq!(curly_braces("{felipe : oi}"), Ok(("", "felipe : oi")))
-}
-
 pub fn json_string(input: &str) -> IResult<&str, Json> {
-    let (input, parsed) = delimited(
+    let (rest, parsed) = delimited(
         char('"'),
         map(many0(satisfy(|c| c != '"')), |chars: Vec<char>| {
             chars.into_iter().collect::<String>()
@@ -44,7 +48,7 @@ pub fn json_string(input: &str) -> IResult<&str, Json> {
         char('"'),
     )(input)?;
 
-    Ok((input, Json::String(parsed)))
+    Ok((rest, Json::String(parsed)))
 }
 
 pub fn json_bool(input: &str) -> IResult<&str, Json> {
@@ -55,21 +59,50 @@ pub fn json_bool(input: &str) -> IResult<&str, Json> {
 }
 
 pub fn json_number(input: &str) -> IResult<&str, Json> {
-    let (input, digits) = digit0(input)?;
+    let (rest, digits) = digit0(input)?;
 
     let parsed_number = digits.parse::<f64>().unwrap();
-    Ok((input, Json::Number(parsed_number)))
+    Ok((rest, Json::Number(parsed_number)))
+}
+
+fn white_space(input: &str) -> IResult<&str, Json> {
+    delimited(multispace0, json, multispace0)(input)
 }
 
 pub fn json_array(input: &str) -> IResult<&str, Json> {
-    let (input, parsed) = delimited(
+    let (rest, parsed) = delimited(
         char('['),
-        separated_list0(char(','), delimited(space0, json, space0)),
+        separated_list0(char(','), delimited(multispace0, json, multispace0)),
         char(']'),
     )(input)?;
-    Ok((input, Json::Array(parsed)))
+    Ok((rest, Json::Array(parsed)))
 }
 
-// parse to tranform string to i32
-// tag == token
-// alt == any
+fn entry(input: &str) -> IResult<&str, (String, Json)> {
+    map(
+        tuple((
+            terminated(delimited(multispace0, json_string, multispace0), char(':')),
+            delimited(multispace0, json, multispace0),
+        )),
+        |(key, value)| (key.to_string(), value),
+    )(input)
+}
+
+fn json_obj(input: &str) -> IResult<&str, Json> {
+    let (rest, parsed) = delimited(
+        char('{'),
+        separated_list0(char(','), delimited(multispace0, entry, multispace0)),
+        char('}'),
+    )(input)?;
+
+    let obj = parsed.into_iter().fold(HashMap::new(), |mut acc, (k, v)| {
+        acc.insert(k, v);
+        acc
+    });
+
+    Ok((rest, Json::Object(obj)))
+}
+
+fn json_null(input: &str) -> IResult<&str, Json> {
+    map(tag("null"), |_| Json::Null)(input)
+}
