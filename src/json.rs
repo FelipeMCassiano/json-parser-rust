@@ -1,19 +1,12 @@
-#![allow(dead_code)]
-use core::{fmt, str};
-
+use core::str;
+#[derive(Debug, PartialEq)]
 pub enum Json {
     Null,
     Bool(bool),
-    Number(f64),
+    Number(i32),
     String(String),
     Array(Vec<Json>),
     Object(std::collections::HashMap<String, Json>),
-}
-
-impl fmt::Display for Json {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "json",)
-    }
 }
 
 pub fn json(input: &str) -> IResult<&str, Json> {
@@ -32,14 +25,14 @@ use std::collections::HashMap;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, digit0, multispace0, satisfy},
+    character::complete::{self, char, multispace0, satisfy},
     combinator::map,
     multi::{many0, separated_list0},
     sequence::{delimited, terminated, tuple},
     IResult,
 };
 
-pub fn json_string(input: &str) -> IResult<&str, Json> {
+fn json_string(input: &str) -> IResult<&str, Json> {
     let (rest, parsed) = delimited(
         char('"'),
         map(many0(satisfy(|c| c != '"')), |chars: Vec<char>| {
@@ -47,29 +40,27 @@ pub fn json_string(input: &str) -> IResult<&str, Json> {
         }),
         char('"'),
     )(input)?;
-
     Ok((rest, Json::String(parsed)))
 }
 
-pub fn json_bool(input: &str) -> IResult<&str, Json> {
+fn json_bool(input: &str) -> IResult<&str, Json> {
     alt((
         map(tag("false"), |_| Json::Bool(false)),
         map(tag("true"), |_| Json::Bool(true)),
     ))(input)
 }
 
-pub fn json_number(input: &str) -> IResult<&str, Json> {
-    let (rest, digits) = digit0(input)?;
+fn json_number(input: &str) -> IResult<&str, Json> {
+    let (rest, digits) = complete::i32(input)?;
 
-    let parsed_number = digits.parse::<f64>().unwrap();
-    Ok((rest, Json::Number(parsed_number)))
+    Ok((rest, Json::Number(digits)))
 }
 
 fn white_space(input: &str) -> IResult<&str, Json> {
     delimited(multispace0, json, multispace0)(input)
 }
 
-pub fn json_array(input: &str) -> IResult<&str, Json> {
+fn json_array(input: &str) -> IResult<&str, Json> {
     let (rest, parsed) = delimited(
         char('['),
         separated_list0(char(','), delimited(multispace0, json, multispace0)),
@@ -78,13 +69,22 @@ pub fn json_array(input: &str) -> IResult<&str, Json> {
     Ok((rest, Json::Array(parsed)))
 }
 
+fn convert_json_to_string(j: Json) -> String {
+    let convert = match j {
+        Json::String(s) => Some(s),
+        _ => None,
+    };
+
+    convert.expect("i hate rust compiler")
+}
+
 fn entry(input: &str) -> IResult<&str, (String, Json)> {
     map(
         tuple((
             terminated(delimited(multispace0, json_string, multispace0), char(':')),
             delimited(multispace0, json, multispace0),
         )),
-        |(key, value)| (key.to_string(), value),
+        |(key, value)| (convert_json_to_string(key), value),
     )(input)
 }
 
