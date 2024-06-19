@@ -1,9 +1,10 @@
-use crate::json::{json, Json};
+use crate::{json, Json};
 
 #[cfg(test)]
 #[test]
 fn json_obj_test() {
     use std::collections::HashMap;
+
     let mut expected_map1 = HashMap::new();
     expected_map1.insert("key".to_string(), Json::String("value".to_string()));
 
