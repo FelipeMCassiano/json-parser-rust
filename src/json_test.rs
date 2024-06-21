@@ -38,12 +38,14 @@ fn json_null_test() {
 
 #[test]
 fn json_number_test() {
-    assert_eq!(json("123"), Ok(("", Json::Number(123))))
+    assert_eq!(json("123"), Ok(("", Json::Number(123))));
+    assert_eq!(json("-123"), Ok(("", Json::Number(-123))))
 }
 
 #[test]
 fn json_bool_test() {
-    assert_eq!(json("true"), Ok(("", Json::Bool(true))))
+    assert_eq!(json("true"), Ok(("", Json::Bool(true))));
+    assert_eq!(json("false"), Ok(("", Json::Bool(false))))
 }
 
 #[test]
@@ -62,7 +64,14 @@ fn json_array_test() {
     );
 
     assert_eq!(
-        json("[\"abc\"]"),
-        Ok(("", Json::Array(vec![Json::String("abc".to_string())])))
+        json("[\"a\",\"b\",\"c\"]"),
+        Ok((
+            "",
+            Json::Array(vec![
+                Json::String("a".to_string()),
+                Json::String("b".to_string()),
+                Json::String("c".to_string())
+            ])
+        ))
     )
 }
